@@ -3,14 +3,62 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	//	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/elasticache"
 	"os"
+	"time"
 )
+
+//func grabStats(region string, clusterId string) {
+func grabStats(region string, instance string) float64 {
+	s := session.Must(session.NewSessionWithOptions(session.Options{Config: aws.Config{Region: aws.String(region)}}))
+	svc := cloudwatch.New(s)
+	endTime := time.Now()
+	duration, _ := time.ParseDuration("-1h")
+	startTime := endTime.Add(duration)
+	namespace := "AWS/ElastiCache"
+	metricname := "CurrItems"
+	metricid := "noeffingidea"
+	period := int64(3600)
+	stat := "Average"
+	query := &cloudwatch.MetricDataQuery{
+		Id: &metricid,
+		MetricStat: &cloudwatch.MetricStat{
+			Metric: &cloudwatch.Metric{
+				Namespace:  &namespace,
+				MetricName: &metricname,
+				Dimensions: []*cloudwatch.Dimension{
+					//Dimensions: []*cloudwatch.DimensionFilter{
+					&cloudwatch.DimensionFilter{
+						Name:  aws.String("CacheClusterId"),
+						Value: aws.String(instance),
+					},
+				},
+			},
+			Period: &period,
+			Stat:   &stat,
+		},
+	}
+	resp, err := svc.GetMetricData(&cloudwatch.GetMetricDataInput{
+		EndTime:           &endTime,
+		StartTime:         &startTime,
+		MetricDataQueries: []*cloudwatch.MetricDataQuery{query},
+	})
+
+	if err != nil {
+		fmt.Println("Got error getting metric data")
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	j := *resp.MetricDataResults[0]
+	return (*j.Values[0])
+
+}
 
 func listRegions() []string {
 	var regions []string
@@ -60,20 +108,9 @@ func listCaches(region string, results chan<- []*elasticache.CacheCluster, outf 
 		return
 	}
 
-	//	cw := cloudwatch.New(sess)
-	//	cws, _ := cw.ListMetrics(&cloudwatch.ListMetricsInput{
-	//		MetricName: aws.String("CurrItems"),
-	//		Namespace:  aws.String("AWS/ElastiCache"),
-	//		Dimensions: []*cloudwatch.DimensionFilter{
-	//			&cloudwatch.DimensionFilter{
-	//				Name: aws.String(dimension),
-	//			},
-	//		},
-	//	})
-	//fmt.Println("Metrics", result.Metrics)
-
 	for _, r := range result.CacheClusters {
 		//fmt.Println(r)
+		keyCount := grabStats(region, *r.CacheClusterId)
 		if err := outf.Write([]string{
 			*r.CacheClusterId,
 			*r.CacheClusterStatus,
@@ -81,6 +118,7 @@ func listCaches(region string, results chan<- []*elasticache.CacheCluster, outf 
 			*r.PreferredAvailabilityZone,
 			*r.CacheNodeType,
 			*r.CacheParameterGroup.CacheParameterGroupName,
+			fmt.Sprintf("%f", keyCount),
 			*r.EngineVersion}); err != nil {
 			fmt.Println("error writing record to csv:", err)
 		}
@@ -102,6 +140,7 @@ func main() {
 		"availability_zone",
 		"node_type",
 		"parameter_group",
+		"key_count",
 		"version"}); err != nil {
 		fmt.Println("error writing record to csv:", err)
 	}
