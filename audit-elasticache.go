@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	//	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -58,6 +59,18 @@ func listCaches(region string, results chan<- []*elasticache.CacheCluster, outf 
 		}
 		return
 	}
+
+	//	cw := cloudwatch.New(sess)
+	//	cws, _ := cw.ListMetrics(&cloudwatch.ListMetricsInput{
+	//		MetricName: aws.String("CurrItems"),
+	//		Namespace:  aws.String("AWS/ElastiCache"),
+	//		Dimensions: []*cloudwatch.DimensionFilter{
+	//			&cloudwatch.DimensionFilter{
+	//				Name: aws.String(dimension),
+	//			},
+	//		},
+	//	})
+	//fmt.Println("Metrics", result.Metrics)
 
 	for _, r := range result.CacheClusters {
 		//fmt.Println(r)
